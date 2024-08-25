@@ -1,3 +1,55 @@
 ./idea
 .DS_Store
 
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+env/
+venv/
+
+# Python egg files
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Logs and local files
+*.log
+*.env
+*.local
+*.lock
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Test results
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# MyPy
+.mypy_cache/
+
+# Pyre type checker
+.pyre/
+
+# PyLint
+.pylint.d/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+*.so
