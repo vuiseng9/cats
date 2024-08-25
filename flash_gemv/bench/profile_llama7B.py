@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 from utils import benchmark
 import flash_gemv
+from functools import partial
 
 def mistral_direct_mlp_optimal(x, Wgate, Wup, Wdownt, threshold, act_fn):
     return torch.matmul((act_fn(torch.matmul(x, Wgate)) * torch.matmul(x, Wup)), Wdownt)
@@ -57,16 +58,16 @@ if __name__ == "__main__":
     # torch.cuda.synchronize()
     
     # mistral_direct_mlp(input, gate, up_t, down, args.ths, hidden_act)
-    time_baseline = benchmark(mistral_direct_baseline, input, gate, up_t, down, args.ths, nn.SiLU())
-    time_direct = benchmark(mistral_direct_mlp, input, gate, up_t, down, args.ths, nn.SiLU())
+    time_baseline = benchmark(partial(mistral_direct_baseline, input, gate, up_t, down, args.ths, nn.SiLU()))
+    time_direct = benchmark(partial(mistral_direct_mlp, input, gate, up_t, down, args.ths, nn.SiLU()))
     input_3d = input.unsqueeze(1).contiguous()
-    time_direct_triton = benchmark(mistral_direct_mlp_triton, input_3d, gate, up_t, down, args.ths, nn.SiLU())
-    time_dense_mlp = benchmark(mistral_direct_mlp_optimal, input, gate, up, down, args.ths, nn.SiLU())
+    time_direct_triton = benchmark(partial(mistral_direct_mlp_triton, input_3d, gate, up_t, down, args.ths, nn.SiLU()))
+    time_dense_mlp = benchmark(partial(mistral_direct_mlp_optimal, input, gate, up, down, args.ths, nn.SiLU()))
 
     gate = torch.rand((hidden_size, k_fp32), dtype=dtype).cuda() - 0.5
     up = torch.rand((hidden_size, k_fp32), dtype=dtype).cuda() - 0.5
     down = torch.rand((k_fp32, hidden_size), dtype=dtype).cuda() - 0.5
-    time_direct_optimal = benchmark(mistral_direct_mlp_optimal, input, gate, up, down, args.ths, nn.SiLU())
+    time_direct_optimal = benchmark(partial(mistral_direct_mlp_optimal, input, gate, up, down, args.ths, nn.SiLU()))
     print(f"[{k_fp32}]Dense: {time_dense_mlp}, Baseline: {time_baseline}, Direct: {time_direct}, Triton: {time_direct_triton}, Optimal: {time_direct_optimal}")
     with open(args.filename, "a") as f:
         print(f"{1-k_fp32/intermediate_size},{k_fp32},{time_dense_mlp},{time_baseline},{time_direct},{time_direct_triton},{time_direct_optimal}", file=f)

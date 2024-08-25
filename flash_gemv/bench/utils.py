@@ -9,9 +9,9 @@ ACT2FN = {
 }
 
 
-def benchmark(fn, input, Wgate, Wup, Wdown, idx, activation="swish", warmup=20, rep=80, quantiles=None, fast_flush=True):
+def benchmark(target_bench_fn, activation="swish", warmup=20, rep=80, quantiles=None, fast_flush=True):
     # https://github.com/nox-410/tvm.tl/blob/tl/python/tvm/tl/utils.py#L144    
-    fn(input, Wgate, Wup, Wdown, idx, activation)
+    target_bench_fn()
     torch.cuda.synchronize()
 
     if fast_flush:
@@ -24,7 +24,7 @@ def benchmark(fn, input, Wgate, Wup, Wdown, idx, activation="swish", warmup=20, 
     start_event.record()
     for _ in range(5):
         cache.zero_()
-        fn(input, Wgate, Wup, Wdown, idx, activation)
+        target_bench_fn()
     end_event.record()
     torch.cuda.synchronize()
     estimate_ms = start_event.elapsed_time(end_event) / 5
@@ -37,13 +37,13 @@ def benchmark(fn, input, Wgate, Wup, Wdown, idx, activation="swish", warmup=20, 
 
     # Warm-up
     for _ in range(n_warmup):
-        fn(input, Wgate, Wup, Wdown, idx, activation)
+        target_bench_fn()
     
     # Benchmark
     for i in range(n_repeat):
         cache.zero_()
         start_event[i].record()
-        fn(input, Wgate, Wup, Wdown, idx, activation)
+        target_bench_fn()
         end_event[i].record()
     torch.cuda.synchronize()
     times = torch.tensor(
