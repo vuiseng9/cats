@@ -25,7 +25,21 @@ def get_k_mistral_direct_mlp(x, Wgate, threshold, act_fn):
     (_,idx) = torch.nonzero(torch.abs(x_1) > threshold, as_tuple=True)
     return idx.shape[-1]
 
+# SCAP kernel -------------------------------------------------------------------------------
+scap_fc=flash_gemv.gather_transposed_gemv_flag_3d
 
+def get_gated_threshold_scap(x, Wgatet, Wupt, tau_upgate, sparsity, act_fn):
+    x_mask = torch.abs(x) > tau_upgate
+    gated = scap_fc(x, Wupt, x_mask) * act_fn(scap_fc(x, Wgatet, x_mask))
+    return torch.quantile(torch.abs(gated), sparsity)
+
+def mistral_direct_mlp_triton_scap(x, Wgatet, Wupt, Wdownt, tau_upgate, tau_down, act_fn):
+    x_mask = torch.abs(x) > tau_upgate
+    gated = scap_fc(x, Wupt, x_mask) * act_fn(scap_fc(x, Wgatet, x_mask))
+    
+    gated_mask = torch.abs(gated) > tau_down
+    return scap_fc(gated, Wdownt, gated_mask)
+# EOF SCAP kernel -------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -64,11 +78,20 @@ if __name__ == "__main__":
     time_direct_triton = benchmark(partial(mistral_direct_mlp_triton, input_3d, gate, up_t, down, args.ths, nn.SiLU()))
     time_dense_mlp = benchmark(partial(mistral_direct_mlp_optimal, input, gate, up, down, args.ths, nn.SiLU()))
 
+    #  bench SCAP kernel -----------------------------------------------
+    ffn_sparsity = (1-k_fp32/intermediate_size)*2/3
+    threshold_upgate = torch.quantile(torch.abs(input), ffn_sparsity)
+    threshold_down = get_gated_threshold_scap(input_3d, gate, up, threshold_upgate, ffn_sparsity, nn.SiLU())
+    
+    time_direct_triton_scap = benchmark(partial(mistral_direct_mlp_triton_scap, input_3d, gate, up, down, threshold_upgate, threshold_down, nn.SiLU()))
+    # EO bench SCAP kernel -----------------------------------------------
+
+    # !!! gate, up, down shape are touched! this section should come last for optimal profiling
     gate = torch.rand((hidden_size, k_fp32), dtype=dtype).cuda() - 0.5
     up = torch.rand((hidden_size, k_fp32), dtype=dtype).cuda() - 0.5
     down = torch.rand((k_fp32, hidden_size), dtype=dtype).cuda() - 0.5
     time_direct_optimal = benchmark(partial(mistral_direct_mlp_optimal, input, gate, up, down, args.ths, nn.SiLU()))
-    print(f"[{k_fp32}]Dense: {time_dense_mlp}, Baseline: {time_baseline}, Direct: {time_direct}, Triton: {time_direct_triton}, Optimal: {time_direct_optimal}")
+    print(f"[{k_fp32:5}/{ffn_sparsity:4.2f}]Dense: {time_dense_mlp}, Baseline: {time_baseline}, Direct: {time_direct}, Triton: {time_direct_triton}, Optimal: {time_direct_optimal}, SCAP: {time_direct_triton_scap}")
     with open(args.filename, "a") as f:
-        print(f"{1-k_fp32/intermediate_size},{k_fp32},{time_dense_mlp},{time_baseline},{time_direct},{time_direct_triton},{time_direct_optimal}", file=f)
+        print(f"{ffn_sparsity},{k_fp32},{time_dense_mlp},{time_baseline},{time_direct},{time_direct_triton},{time_direct_optimal},{time_direct_triton_scap}", file=f)
 
