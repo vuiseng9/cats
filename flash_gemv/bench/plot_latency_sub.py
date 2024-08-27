@@ -4,6 +4,20 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
+plt.rcParams['font.family'] = 'serif'  # Use 'sans-serif' for Arial/Helvetica
+plt.rcParams['font.serif'] = ['Liberation Sans']  # Change to your preferred serif font
+plt.rcParams['text.usetex'] = False
+plt.rcParams['font.size'] = 16   
+plt.rcParams['axes.titlesize'] = 16   
+plt.rcParams['axes.labelsize'] = 16  
+plt.rcParams['xtick.labelsize'] = 12   
+plt.rcParams['ytick.labelsize'] = 12   
+plt.rcParams['legend.fontsize'] = 16   
+
+cmap_name = 'tab10'
+BLUE, ORANGE, GREEN, RED, PURPLE = sns.color_palette(cmap_name)[:5]
+sns.color_palette(cmap_name)
+
 # Path to your CSV file
 # file_paths = ["final_methods_mistral7B_fp32.csv", "final_methods_llama7B_fp32.csv"]
 # titles = ["CATS of Mistral-7B’s MLP", "CATS of Llama2-7B’s MLP"]
@@ -54,23 +68,29 @@ for idx in range(len(file_paths)):
     df = pd.DataFrame(data)
 
     # Set the line type as scatter plot+line plot
-    sns.set_theme()
+    sns.set_theme(context='paper', style='white')
 
     # Create the first figure
+    plt.figure(figsize=(4, 4))
     plt.figure(1 + idx * 2)
-    sns.lineplot(data=df, x="Sparsity", y="Dense Latency", marker="o", errorbar=None)
-    sns.lineplot(data=df, x="Sparsity", y="CATS Latency", marker="o", errorbar=None)
-    sns.lineplot(data=df, x="Sparsity", y="Optimal Latency", marker="o", errorbar=None)
-    sns.lineplot(data=df, x="Sparsity", y="SCAP Latency", marker="o", errorbar=None)
-    plt.ylabel("Latency(ms)")
-    plt.xlabel("Sparsity")
-    plt.legend(["Dense", "CATS", "Optimal (Cropped Weight)", "SCAP"])
-    plt.title(titles[idx])
+    sns.lineplot(data=df, x="Sparsity", y="Dense Latency", color=GREEN, marker="o", errorbar=None)
+    sns.lineplot(data=df, x="Sparsity", y="CATS Latency", color=BLUE, marker="o", errorbar=None)
+    # sns.lineplot(data=df, x="Sparsity", y="Optimal Latency", marker="o", errorbar=None)
+    sns.lineplot(data=df, x="Sparsity", y="SCAP Latency", color=ORANGE, marker="o", errorbar=None)
+    plt.ylabel("Latency (ms)")
+    plt.xlabel("FFN Sparsity (%)")
+    plt.legend(["Dense", "CATS", "SCAP"])
+    # plt.tight_layout()
+    plt.grid(True, linestyle='dotted')
+    plt.title("Latency of Mistral-7B's FFN (SwiGLU)")
     save_dir = os.path.join(os.getenv("CATS_RESPATH", ""), "speedup", "figures")
-    print(f"Saving figure 4 to {save_dir}")
+    plot_name = f"mistral_ffn_sparsity_latency_sweep"
+    print(f"Saving {plot_name}.png/pdf to {save_dir}")
     os.makedirs(save_dir, exist_ok=True)
-    plt.savefig(save_dir + f"/fig4: {models[idx]}_mlp_latency.png")
+    plt.savefig(save_dir + f"/{plot_name}.png")
+    plt.savefig(save_dir + f"/{plot_name}.pdf")
 
+    exit()
     # Create the second figure with the additional line
     plt.figure(2 + idx * 2)
     sns.lineplot(data=df, x="Sparsity", y="Dense Latency", marker="o", errorbar=None)
