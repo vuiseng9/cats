@@ -11,7 +11,6 @@ class CATS_SwiGLU(nn.Module):
     def __init__(self, original, quiet=True):
         super(CATS_SwiGLU, self).__init__()
         self.quiet = quiet
-        self.original = original
         self.threshold = -1
         self.act_fn = original.act_fn
         self.Wup = original.up_proj.weight.contiguous().data
@@ -25,7 +24,11 @@ class CATS_SwiGLU(nn.Module):
         assert x.dim() == 3, "assume 3d x"
         if x.dim() == 3 and x.shape[0] == 1 and x.shape[1] == 1:
             return self.decode_forward(x)
-        return self.original(x)
+        return self.prefill_forward(x)
+    
+    def prefill_forward(self, x):
+        z = torch.matmul(x, self.Wup.t()) * self.act_fn(torch.matmul(x, self.Wgatet))
+        return torch.matmul(z, self.Wdownt)
     
     def decode_forward(self, x):
         x_1 = self.act_fn(torch.matmul(x, self.Wgatet))
@@ -34,12 +37,10 @@ class CATS_SwiGLU(nn.Module):
         return flash_gemv.gather_transposed_gemv_flag_3d(z, self.Wdownt, flags)
 
 
-
 class SCAP_SwiGLU(nn.Module):
     def __init__(self, original, quiet=True):
         super(SCAP_SwiGLU, self).__init__()
         self.quiet = quiet
-        self.original = original
         self.tau_upgate = -1
         self.tau_down = -1
         self.act_fn = original.act_fn
@@ -54,8 +55,12 @@ class SCAP_SwiGLU(nn.Module):
         assert x.dim() == 3, "assume 3d x"
         if x.dim() == 3 and x.shape[0] == 1 and x.shape[1] == 1:
             return self.decode_forward(x)
-        return self.original(x)
+        return self.prefill_forward(x)
     
+    def prefill_forward(self, x):
+        z = torch.matmul(x, self.Wupt) * self.act_fn(torch.matmul(x, self.Wgatet))
+        return torch.matmul(z, self.Wdownt)
+
     def decode_forward(self, x):
         # for debug
         # z = torch.matmul(x, self.Wupt) * self.act_fn(torch.matmul(x, self.Wgatet))
@@ -68,8 +73,7 @@ class SCAP_SwiGLU(nn.Module):
         gated = scap_fc(x, self.Wupt, x_mask) * self.act_fn(scap_fc(x, self.Wgatet, x_mask))
 
         gated_mask = torch.abs(gated) > self.tau_down
-        o = scap_fc(gated, self.Wdownt, gated_mask)
-        return o
+        return scap_fc(gated, self.Wdownt, gated_mask)
     
 
 def replace_module_with_custom(model, mod_cls, custom_cls, quiet=True):
